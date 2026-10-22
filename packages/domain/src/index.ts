@@ -4,6 +4,7 @@ export * from './speech.js';
 export * from './seed.js';
 export * from './store.js';
 export * from './service.js';
+export * from './api-types.js';
 export * from './rules/result.js';
 export * from './rules/resolve.js';
 export * from './rules/customs.js';

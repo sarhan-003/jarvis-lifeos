@@ -1,1 +1,25 @@
-{"name":"@parcel/agent-api","version":"1.0.0","private":true,"type":"module"}
+{
+  "name": "@parcel/agent-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p .",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "node --env-file-if-exists=../../.env dist/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1155.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@parcel/domain": "1.0.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6"
+  }
+}
