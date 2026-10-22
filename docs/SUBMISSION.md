@@ -46,6 +46,30 @@ Record with the Claude engine enabled if you have a key. The header says which e
   - The built-in `hostHeaderValidation` middleware was easy to use.
   - *Fill in: onboarding and what you'd change.*
 
+## Friction log (draft: real issues from this build, review before submitting)
+
+Each entry below happened during development and is reproducible in this repo's history and tests. Severity uses the Devpost scale.
+
+### 1. Elicitation silently skipped with the stateless Streamable HTTP transport
+- **Task:** ask the user to confirm a destructive tool call (`deleteTask`) via MCP elicitation.
+- **Steps:**
+  1. Used `StreamableHTTPServerTransport` with `sessionIdGenerator: undefined` (stateless) and a new `Server` per POST, as in the SDK's stateless example.
+  2. Inside `tools/call`, checked `server.getClientCapabilities()?.elicitation`, then called `server.elicitInput(...)`.
+- **Expected:** the client, which declared `elicitation: { form: {} }`, gets the prompt.
+- **Actual:** `getClientCapabilities()` was `undefined`, because the per-request server never saw `initialize`. The client's elicitation reply would also arrive as a separate POST that no server instance is waiting for. Nothing warned us: the confirmation path was just skipped, and our test caught it.
+- **Severity:** important.
+- **Workaround:** switched to stateful sessions (session map, `onsessioninitialized`, idle cleanup). See `server/src/mcp.js`.
+- **Suggestion:** document that elicitation (and sampling) need stateful mode, and have `elicitInput` throw a clear error when capabilities are unknown, instead of the feature silently not working.
+
+### 2. `registerTool` forces SDK-side validation
+- **Task:** expose an existing tool catalogue (zod schemas plus our own normalization, confirmation and audit pipeline) over MCP.
+- **Steps:** tried `McpServer.registerTool` with our zod schemas.
+- **Expected:** a way to hand raw arguments to our own validator, so relative dates like "tomorrow" get normalized and failed calls get logged.
+- **Actual:** the SDK validates first, so invalid calls never reach our audit log and inputs can't be normalized.
+- **Severity:** nice-to-have.
+- **Workaround:** used the low-level `Server` with `ListToolsRequestSchema` / `CallToolRequestSchema` handlers and served our own JSON Schemas.
+- **Suggestion:** a `registerTool` option to accept a plain JSON Schema and skip built-in validation.
+
 ## Team split (API contract first)
 
 The API contract is the table in the README plus the action record shape. Freeze it before splitting work.

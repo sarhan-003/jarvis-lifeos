@@ -108,7 +108,7 @@ This serves the built web app, the API and `/mcp` together on http://localhost:8
 npm test
 ```
 
-Runs 23 end-to-end tests: REST, the assistant scenarios and the MCP protocol. Each test starts its own server on a random port with a temporary data file, so it never touches your data and doesn't need a running server or an API key.
+Runs 29 tests: REST, the assistant scenarios, the Claude agent loop (against a local mock of the Messages API) and the MCP protocol. Each test uses a temporary data file and its own server on a random port, so it never touches your data and doesn't need a running server, network access or an API key.
 
 ### 7. Check the MCP endpoint by hand
 
@@ -195,14 +195,23 @@ The MCP tests (`server/test/mcp.test.js`) drive `/mcp` with the official MCP SDK
 - Host and Origin rejection
 - bearer-token auth
 
-All 23 tests pass.
+The Claude agent tests (`server/test/claude-agent.test.js`) point the real Anthropic SDK at a **local mock** of the Messages API (`ANTHROPIC_BASE_URL`) that returns scripted responses. They check:
+- the request we send: model, system prompt with today's date, all 8 tool JSON Schemas, `output_config.effort`
+- the tool loop: `tool_use` is executed and its `tool_result` returned, with several tool calls in one turn sharing one user message
+- errors and confirmations reported back to the model
+- history normalization
+- refusal handling and the fallback to the offline engine on API errors
+
+They do **not** test which tools the real Claude model chooses. That needs a real API key.
+
+All 29 tests pass.
 
 We also ran the four scenarios by hand in the browser, plus confirm/cancel, inline task editing, page reload persistence, and desktop and mobile layouts.
 
 ### Verification status (2026-10-22, Windows 10, Node 25.9)
 
 **Tested and working:**
-- `npm test`: 23/23 pass, both in the working copy and in a fresh `git clone` + `npm ci`.
+- `npm test`: all pass, both in the working copy and in a fresh `git clone` + `npm ci` (23/23 at that point; 29/29 after the Claude agent tests were added).
 - `npm run build` + `npm start` from a fresh clone. The built web app, `/api` and `/mcp` are all served together.
 - `/mcp` over raw HTTP (curl):
   - `initialize` returns protocol `2025-11-25` and an `mcp-session-id`
@@ -214,7 +223,7 @@ We also ran the four scenarios by hand in the browser, plus confirm/cancel, inli
 - Dev mode: the Vite proxy forwards `/api` correctly. Cross-site browser origins get 403.
 
 **Not verified:**
-- Claude tool selection with a real API key (the build machine had none). With an invalid key, the SDK call reaches the Anthropic API, the 401 is handled, and the offline engine takes over with a visible notice.
+- **Real Claude tool selection (blocked: no API key on the build machine).** Our side of the integration is covered by the mock-API tests above. With an invalid key, the SDK call reaches the Anthropic API, the 401 is handled, and the offline engine takes over with a visible notice.
 - Voice input with a real microphone. Speech output was observed working.
 - Third-party MCP clients (MCP Inspector, Claude Desktop) and any connection to Alexa+ itself. MCP was tested with the official `@modelcontextprotocol/sdk` client and with raw HTTP.
 - Node versions below 25.9, macOS and Linux.
@@ -246,6 +255,7 @@ server/
   src/mcp.js            MCP server (Streamable HTTP, 2025-11-25)
   test/api.test.js      end-to-end REST + agent tests
   test/mcp.test.js      MCP protocol tests
+  test/claude-agent.test.js  Claude agent loop vs. a local mock API
 docs/SUBMISSION.md      Devpost text, demo script, feedback drafts
 ```
 
