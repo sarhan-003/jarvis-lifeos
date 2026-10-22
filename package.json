@@ -1,23 +1,37 @@
 {
-  "name": "jarvis-lifeos",
+  "name": "parcel-concierge",
   "version": "1.0.0",
   "private": true,
-  "description": "Jarvis LifeOS - an Alexa+-style simulated AI study and productivity assistant with real tool calling.",
+  "description": "Parcel Concierge: a parcel delivery and customs MCP server for Alexa+, with a simulated Alexa+ web app.",
   "license": "MIT",
+  "type": "module",
   "engines": {
     "node": ">=22.9.0"
   },
   "workspaces": [
-    "server",
-    "client"
+    "packages/domain",
+    "apps/mcp-server",
+    "apps/agent-api",
+    "apps/web"
   ],
   "scripts": {
-    "dev": "concurrently -n server,client -c cyan,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
-    "build": "npm run build -w client",
-    "start": "npm run start -w server",
-    "test": "npm test -w server"
+    "dev": "npm run build -w packages/domain && concurrently -k -n domain,mcp,agent,web -c gray,cyan,magenta,green \"npm run dev -w packages/domain\" \"npm run dev -w apps/mcp-server\" \"npm run dev -w apps/agent-api\" \"npm run dev -w apps/web\"",
+    "build": "npm run build -w packages/domain && npm run build -w apps/mcp-server && npm run build -w apps/agent-api && npm run build -w apps/web",
+    "start": "concurrently -k -n mcp,agent -c cyan,magenta \"npm run start -w apps/mcp-server\" \"npm run start -w apps/agent-api\"",
+    "test": "npm run build -w packages/domain && vitest run",
+    "typecheck": "npm run build -w packages/domain && tsc -p apps/mcp-server --noEmit && tsc -p apps/agent-api --noEmit && tsc -p apps/web --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write ."
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.10.0",
+    "concurrently": "^9.1.2",
+    "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.0",
+    "vitest": "^5.0.5"
   }
 }

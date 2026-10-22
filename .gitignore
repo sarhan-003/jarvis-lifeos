@@ -1,9 +1,11 @@
 node_modules/
 dist/
+*.tsbuildinfo
+coverage/
 .env
 .env.*
 !.env.example
-server/data/*.json
-!server/data/.gitkeep
 *.log
 .DS_Store
+# Old local clone of the Jarvis repo; not part of this project
+jarvis-lifeos/
