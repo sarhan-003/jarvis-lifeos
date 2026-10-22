@@ -1,18 +1,42 @@
-// Conversation with voice + text input. Each assistant turn shows the tool
-// actions the backend actually executed for it.
+// Simulated Alexa+ conversation with voice + text input. Each reply shows the
+// path it took: the user's words, the assistant engine, the MCP tools/call
+// requests to the Jarvis LifeOS server, and their real results.
 import { useEffect, useRef, useState } from 'react';
 import ActionCard from './ActionCard.jsx';
 import { useSpeechInput } from '../useSpeech.js';
 
 const SUGGESTIONS = [
-  'Create a task to revise binary trees tomorrow',
-  'Show my pending tasks',
-  'Create a study plan for tomorrow with two hours of graph algorithms and one hour of dynamic programming',
-  'Mark binary trees complete',
-  "What's my daily summary?",
+  'Alexa, ask Jarvis to create a task to revise binary trees tomorrow',
+  'Alexa, ask Jarvis to show my pending tasks',
+  'Alexa, ask Jarvis to create a study plan for tomorrow with two hours of graph algorithms and one hour of dynamic programming',
+  'Alexa, ask Jarvis to mark binary trees complete',
+  'Alexa, ask Jarvis for my daily summary',
 ];
 
-export default function Chat({ messages, sending, onSend, onResolve, tts }) {
+function McpTrace({ message }) {
+  const calls = message.actions?.filter((a) => a.via === 'mcp') ?? [];
+  if (!message.mcp) return null;
+  return (
+    <div className="trace" aria-label="How this request was handled">
+      <span className="trace-step">🎙 You</span>
+      <span className="trace-arrow">→</span>
+      <span className="trace-step">Alexa+ sim · {message.provider ?? 'assistant'}</span>
+      <span className="trace-arrow">→</span>
+      <span className="trace-step trace-mcp">
+        MCP {message.mcp.transport === 'streamable-http' ? 'Streamable HTTP' : 'in-process'} · {message.mcp.toolsDiscovered} tools
+      </span>
+      {calls.map((a) => (
+        <span key={a.id} className="trace-call">
+          <span className="trace-arrow">→</span>
+          <code>tools/call {a.tool}</code>
+          <span className={`trace-dot trace-${a.status}`} aria-label={a.status} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export default function Chat({ messages, sending, onSend, onResolve, tts, engine }) {
   const [text, setText] = useState('');
   const listRef = useRef(null);
   const mounted = useRef(false);
@@ -32,10 +56,15 @@ export default function Chat({ messages, sending, onSend, onResolve, tts }) {
   };
 
   const orbState = voice.listening ? 'listening' : sending ? 'thinking' : tts.speaking ? 'speaking' : 'idle';
-  const orbLabel = { listening: 'Listening…', thinking: 'Working…', speaking: 'Speaking…', idle: voice.supported ? 'Tap to talk' : 'Type below' }[orbState];
+  const orbLabel = {
+    listening: 'Listening…',
+    thinking: 'Calling Jarvis over MCP…',
+    speaking: 'Speaking…',
+    idle: voice.supported ? 'Tap the ring and speak' : 'Type below',
+  }[orbState];
 
   return (
-    <section className="panel chat" aria-label="Conversation">
+    <section className="panel chat" aria-label="Alexa+ simulator conversation">
       <div className="chat-hero">
         <button
           className={`orb orb-${orbState}`}
@@ -49,7 +78,8 @@ export default function Chat({ messages, sending, onSend, onResolve, tts }) {
         <div>
           <div className="orb-label">{orbLabel}</div>
           <div className="dim small">
-            {voice.supported ? 'Voice input via your browser' : 'Voice input unavailable in this browser. Text works everywhere.'}
+            Simulated Alexa+{engine ? ` · ${engine}` : ''} · say “Alexa, ask Jarvis to…”
+            {!voice.supported && ' · voice input needs Chrome or Edge, typing works everywhere'}
           </div>
         </div>
         <button className={`btn btn-ghost tts-toggle${tts.enabled ? ' on' : ''}`} onClick={tts.toggle} disabled={!tts.supported} aria-pressed={tts.enabled}>
@@ -60,7 +90,9 @@ export default function Chat({ messages, sending, onSend, onResolve, tts }) {
       <div className="messages" ref={listRef} aria-live="polite">
         {messages.length === 0 && (
           <div className="empty">
-            <p>Ask Jarvis to manage your tasks and study plans. Try one of these:</p>
+            <p>
+              This is a simulated Alexa+ experience. Jarvis LifeOS is the integration behind it: every request below is handled through its MCP server. Try one:
+            </p>
             <div className="chips">
               {SUGGESTIONS.map((s) => (
                 <button key={s} className="chip" onClick={() => onSend(s)} disabled={sending}>
@@ -83,7 +115,7 @@ export default function Chat({ messages, sending, onSend, onResolve, tts }) {
                 ))}
               </div>
             )}
-            {m.provider && <div className="msg-meta">via {m.provider}</div>}
+            {m.role === 'assistant' && (m.mcp ? <McpTrace message={m} /> : m.provider && <div className="msg-meta">via {m.provider}</div>)}
           </div>
         ))}
         {sending && (
@@ -112,7 +144,7 @@ export default function Chat({ messages, sending, onSend, onResolve, tts }) {
           id="chat-input"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder='Try "Create a task to revise binary trees tomorrow"'
+          placeholder='Try "Alexa, ask Jarvis to show my pending tasks"'
           autoComplete="off"
           maxLength={2000}
         />

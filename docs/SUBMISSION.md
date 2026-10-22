@@ -11,30 +11,36 @@ Verified on 2026-10-22 from https://amazonappdev2026.devpost.com/ and its rules 
 
 ## Project description (draft)
 
-**Jarvis LifeOS** is a voice-first study and productivity assistant that simulates an Alexa+-style agentic experience in the browser. Students speak or type naturally ("Create a study plan for tomorrow with two hours of graph algorithms and one hour of dynamic programming"). Jarvis chooses a backend tool, the server validates the arguments and performs a real operation on persistent data, and the reply is spoken back.
+**Jarvis LifeOS is a study and productivity integration for Alexa+, built the way Alexa+ brand experiences are built: as a self-hosted MCP server.** A student can say "Alexa, ask Jarvis to create a study plan for tomorrow with two hours of graph algorithms and one hour of dynamic programming." The agent finds Jarvis's tools over MCP, calls them, and speaks back a real, saved, timed schedule.
 
-What makes it agentic rather than a chatbot:
-- Eight backend tools (create, list, update, complete and delete tasks; generate and update study plans; daily summary) with schema validation. Every result comes from the database.
-- Full transparency: each reply shows which tool ran, its arguments, its status and its actual result or error.
-- Safety: destructive actions (deleting a task, replacing a plan) wait for explicit confirmation. Ambiguous requests return candidates instead of guessing.
-- The study planner turns topics and durations into a timed schedule of focus blocks and breaks. You can then change it by voice.
+What we built:
+- **A self-hosted MCP server** (spec 2025-11-25, Streamable HTTP, sessions) with 8 tools:
+  - tools: create, list, update, complete and delete tasks; generate and update study plans; daily summary
+  - schema validation and MCP tool annotations (read-only, destructive, idempotent)
+  - human confirmation through MCP elicitation for destructive actions
+  - Host/Origin protection and optional bearer auth
+- **An Alexa+ simulator web app**, the track's simulated-experience path.
+  - Its agent is an MCP client of the Jarvis server, exactly like Alexa+ with a brand integration: `tools/list` to discover, `tools/call` to act.
+  - It supports voice in (Web Speech API), spoken replies, a light ring, and "Alexa, ask Jarvis to…" invocations.
+  - Every reply shows its MCP trace and the real result from the database.
+- **Free, swappable AI:** Gemini or Groq free tiers, OpenRouter free models, or Ollama locally, through one OpenAI-compatible adapter. It also supports Claude, and a built-in offline engine so the demo works with no key at all.
+- **Safety and transparency:** destructive actions need explicit confirmation, ambiguous requests return candidates instead of guessing, and every tool call (from the simulator or any external MCP client) is in the activity log.
 
-The same tools are exposed through a self-hosted **MCP server** (spec 2025-11-25, Streamable HTTP), so any MCP-capable agent can drive the same data. MCP clients that support elicitation get a confirmation prompt before anything destructive happens.
-
-How it works: React + Vite front end using the Web Speech API for voice in and out. Node + Express back end with one tool catalogue (zod schemas) shared by Claude tool use (Anthropic API) and a deterministic offline intent engine, so the app keeps working without an API key. Data is stored in a JSON file with atomic writes.
+How it works: React + Vite front end. Node + Express back end with the MCP server built on `@modelcontextprotocol/sdk`, zod-validated tools, and a JSON file store with atomic writes. 39 automated tests cover the REST API, the agent loops and the MCP protocol.
 
 ## Demo video script (target 2:30)
 
-1. **0:00–0:15** Problem: students juggle tasks and study time. Jarvis is an Alexa+-style assistant that *does* things, not just talks. Show the dashboard.
-2. **0:15–0:45** Voice: click the orb and say "Create a task to revise binary trees tomorrow." Show the `createTask` card marked Done and the task in Pending tasks.
-3. **0:45–1:05** Say "Show my pending tasks." The `listTasks` card shows the real records.
-4. **1:05–1:40** Say "Create a study plan for tomorrow with two hours of graph algorithms and one hour of dynamic programming." The timeline appears. Then say "Add 30 minutes of recursion to tomorrow's plan" and show the schedule update.
-5. **1:40–2:00** Say "Mark binary trees complete." The task moves to completed.
-6. **2:00–2:15** Say "Delete …". Show the Needs confirmation card, click Confirm, then open the Activity log.
-7. **2:15–2:40** MCP: in MCP Inspector (Streamable HTTP, `http://localhost:8787/mcp`), show protocol 2025-11-25, run `tools/list`, call `createTask`, then switch to the dashboard where the task appears and the Activity log shows "MCP client".
-8. **2:40–2:50** Reload the page to show the data persists. Close with the architecture slide.
+1. **0:00–0:15** Problem: students juggle tasks and study time. Jarvis LifeOS is the integration that lets Alexa+ actually *do* things for them. Show the README architecture diagram.
+2. **0:15–0:35** MCP server page: endpoint, protocol 2025-11-25, Streamable HTTP, the 8 tools discovered live with their annotations.
+3. **0:35–1:00** Alexa+ simulator: tap the ring and say "Alexa, ask Jarvis to create a task to revise binary trees tomorrow." Point at the trace (`→ MCP Streamable HTTP → tools/call createTask ✓`) and the task in Pending tasks.
+4. **1:00–1:15** "Alexa, ask Jarvis to show my pending tasks." `tools/call listTasks` returns the real records.
+5. **1:15–1:50** "Alexa, ask Jarvis to create a study plan for tomorrow with two hours of graph algorithms and one hour of dynamic programming." The timeline appears. Then "…add 30 minutes of recursion to tomorrow's plan" and show the schedule update.
+6. **1:50–2:05** "Alexa, ask Jarvis to mark binary trees complete." The task moves to completed.
+7. **2:05–2:20** "Alexa, ask Jarvis to delete binary trees." Show the Needs confirmation card, then click Confirm.
+8. **2:20–2:45** External MCP client: in MCP Inspector (Streamable HTTP, `http://localhost:8787/mcp`), run `tools/list`, call `createTask`, then switch to the dashboard where it appears, tagged "MCP client".
+9. **2:45–2:55** Reload to show persistence, and close.
 
-Record with the Claude engine enabled if you have a key. The header says which engine is active, so state it honestly on screen.
+Record with a free LLM engine (Gemini or Groq) if a key is set up. The simulator header names the active engine, so state it honestly. Don't show the real Alexa logo or claim it runs on Alexa devices: say "simulated Alexa+".
 
 ## Product feedback (draft: edit with your own experience)
 

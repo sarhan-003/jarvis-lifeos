@@ -5,11 +5,13 @@ import Chat from './components/Chat.jsx';
 import TasksView, { TaskList, sortTasks } from './components/Tasks.jsx';
 import PlansView, { PlanTimeline } from './components/Plans.jsx';
 import ActionCard from './components/ActionCard.jsx';
+import McpServerView from './components/McpServer.jsx';
 
 const NAV = [
-  { id: 'assistant', label: 'Assistant', icon: '◉' },
+  { id: 'assistant', label: 'Alexa+ simulator', short: 'Assistant', icon: '◉' },
   { id: 'tasks', label: 'Tasks', icon: '☑' },
   { id: 'plans', label: 'Study plan', icon: '▤' },
+  { id: 'mcp', label: 'MCP server', short: 'MCP', icon: '⧉' },
   { id: 'activity', label: 'Activity', icon: '⚡' },
 ];
 
@@ -84,7 +86,7 @@ export default function App() {
         const res = await api.chat(text, history);
         setMessages((m) => [
           ...m,
-          { id: uid(), role: 'assistant', text: res.reply, actions: res.actions, provider: res.provider?.label, notice: res.notice },
+          { id: uid(), role: 'assistant', text: res.reply, actions: res.actions, provider: res.provider?.label, notice: res.notice, mcp: res.mcp },
         ]);
         tts.speak(res.reply);
       } catch (err) {
@@ -161,8 +163,8 @@ export default function App() {
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
           <div>
-            <div className="brand-name">Jarvis</div>
-            <div className="brand-sub">LifeOS</div>
+            <div className="brand-name">Jarvis LifeOS</div>
+            <div className="brand-sub">for Alexa+ · MCP</div>
           </div>
         </div>
         <nav aria-label="Main">
@@ -171,7 +173,10 @@ export default function App() {
               <span className="nav-icon" aria-hidden="true">
                 {n.icon}
               </span>
-              <span className="nav-label">{n.label}</span>
+              <span className="nav-label">
+                <span className="label-full">{n.label}</span>
+                <span className="label-short">{n.short ?? n.label}</span>
+              </span>
               {n.id === 'tasks' && pending.length > 0 && <span className="nav-count">{pending.length}</span>}
               {n.id === 'activity' && awaiting > 0 && <span className="nav-count warn">{awaiting}</span>}
             </button>
@@ -181,7 +186,7 @@ export default function App() {
           <div className={`status-dot ${offline ? 'down' : 'up'}`} />
           <div className="small">
             <div>{offline ? 'Server offline' : health?.ai?.label ?? 'Connecting…'}</div>
-            <div className="dim">Alexa+-style simulation</div>
+            {health?.ai?.warning ? <div className="warn-text">{health.ai.warning}</div> : <div className="dim">Simulated Alexa+ · tools via MCP</div>}
           </div>
         </div>
       </aside>
@@ -213,7 +218,7 @@ export default function App() {
 
         {view === 'assistant' && (
           <div className="dashboard">
-            <Chat messages={messages} sending={sending} onSend={send} onResolve={resolveAction} tts={tts} />
+            <Chat messages={messages} sending={sending} onSend={send} onResolve={resolveAction} tts={tts} engine={health?.ai?.label} />
             <div className="side-col">
               {summary && (
                 <section className="panel stats" aria-label="Today at a glance">
@@ -273,6 +278,7 @@ export default function App() {
 
         {view === 'tasks' && <TasksView tasks={tasks} {...handlers} />}
         {view === 'plans' && <PlansView plans={plans} today={today} />}
+        {view === 'mcp' && <McpServerView />}
         {view === 'activity' && (
           <section className="panel">
             <div className="panel-head">

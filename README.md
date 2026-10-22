@@ -1,23 +1,48 @@
 # Jarvis LifeOS
 
-A voice-first AI study and productivity assistant, built for the Amazon Developer "Build, Ship, Shape" hackathon (Alexa+ track). It has two surfaces over one set of tools:
+**A study and productivity integration for Alexa+, built the way Alexa+ brand integrations are built: as a self-hosted MCP server.** Made for the Amazon Developer "Build, Ship, Shape" hackathon, Alexa+ track.
 
-1. **A self-hosted MCP server** at `/mcp` (MCP spec **2025-11-25**, **Streamable HTTP**). Any MCP client can manage the user's tasks and study plans through it. MCP is the open standard behind Alexa+ integrations.
-2. **A simulated Alexa+-style web experience.** Talk or type to Jarvis. It picks a backend tool, the server validates the arguments and runs the operation against persistent storage, and the dashboard shows the real result: which tool ran, with which arguments, and whether it succeeded, failed or needs your confirmation.
+The track asks for a self-hosted MCP server (spec 2025-11-25 or later, Streamable HTTP), with a simulated Alexa+ experience in a web app as the alternative. This project does both, and connects them:
 
-> We have not connected this to Alexa+ itself (that requires Amazon's Alexa+ preview onboarding) and it does not run on Alexa devices. The MCP server is real and spec-compliant, and we tested it with the official MCP SDK client. The voice web app is a simulation.
+1. **The Jarvis LifeOS MCP server** at `/mcp` (spec **2025-11-25**, **Streamable HTTP**). It exposes 8 tools for tasks, study plans and daily summaries to any MCP client.
+2. **An Alexa+ simulator** in the web app. You speak or type ("Alexa, ask Jarvis to create a study plan for tomorrow…"), and an AI agent does what Alexa+ does with a brand integration:
+   - connects to the Jarvis MCP server
+   - discovers the tools with `tools/list`
+   - runs them with `tools/call`
+   - speaks the result
+
+   Every reply shows that path: `You → Alexa+ sim · engine → MCP Streamable HTTP → tools/call createTask → result`.
+
+```
+ 🎙 "Alexa, ask Jarvis to…"   ┌────────────────────────┐  MCP (Streamable HTTP)  ┌──────────────────────────────┐
+ ───────────────────────────▶ │ Alexa+ simulator agent │ ──── tools/list ──────▶ │ Jarvis LifeOS MCP server     │
+ 🔊 spoken reply  ◀────────── │ Gemini / Groq / Claude │ ──── tools/call ──────▶ │ 8 tools · validation ·       │
+                              │ or offline engine      │ ◀─── results ────────── │ confirmation · JSON store    │
+                              └────────────────────────┘                         └──────────────────────────────┘
+                                                        any other MCP client ──▶  (MCP Inspector, Claude Desktop…)
+```
+
+The AI engine can be a **free** LLM (Groq or Gemini free tier, OpenRouter free models, or Ollama locally), Claude, or a built-in offline engine that needs no key.
+
+> **Honest scope:** this has not been connected to the real Alexa+ service, which requires Amazon's Alexa+ preview onboarding, and it does not run on Alexa devices. The MCP server is real and spec-compliant, tested with the official MCP SDK client and raw HTTP. The Alexa+ experience is a simulation, as the track allows.
 
 ## Features
 
+- **Alexa+ simulator.**
+  - Voice input with a light ring, spoken replies, and Alexa-style invocation: "Alexa, ask Jarvis to…" is understood and handed to the integration.
+  - Every engine (offline, Gemini, Groq, Claude) reaches the tools only through the MCP server, as an MCP client. Each reply shows the MCP trace.
+- **MCP server page.** Shows the endpoint, protocol version, transport, auth mode, the live `tools/list` result with annotations, the number of tool calls made over MCP, and how to connect an MCP client.
 - **Conversation with voice and text.** Browser speech recognition for input (where supported), speech synthesis for replies, and a text box that always works.
 - **Real tool calling.** `createTask`, `listTasks`, `updateTask`, `completeTask`, `deleteTask`, `generateStudyPlan`, `updateStudyPlan` and `getDailySummary`. Each one validates its arguments with zod and changes persisted data. No result is hard-coded.
 - **Task management.** Create, list (pending/completed/all), edit title, due date and priority, complete, and delete, from chat or from the Tasks page.
 - **Study planner.** "Create a study plan for tomorrow with two hours of graph algorithms and one hour of dynamic programming" becomes a timed schedule: focus blocks of at most 60 minutes with breaks between them. The plan is saved, and you can change it ("add 30 minutes of recursion to tomorrow's plan", "remove dynamic programming", "start the plan at 2pm").
 - **Tool transparency.** Each assistant reply lists the tool calls it made, with status, the real result, any error, and expandable arguments. The Activity page shows the full log.
 - **Confirmation for destructive actions.** Deleting a task, or replacing an existing study plan, waits for an explicit Confirm or Cancel.
-- **Two AI engines:**
+- **Choice of AI engine:**
   - **Claude** (Anthropic API, tool use) when `ANTHROPIC_API_KEY` is set.
-  - **Offline intent engine** when no key is set. It is a deterministic rule-based parser that calls the same tools. It understands fewer phrasings, and the UI labels its replies "offline engine". If a Claude call fails, Jarvis falls back to it and shows the API error.
+  - **Free OpenAI-compatible LLMs** through one provider: **Groq**, **Gemini**, **OpenRouter**, **Ollama** (local), or any Chat Completions server. Pick one with `AI_PROVIDER`.
+  - **Offline intent engine** when no AI is configured. It is a deterministic rule-based parser that calls the same tools. It understands fewer phrasings, and the UI labels its replies "offline engine".
+  - If an LLM call fails, Jarvis falls back to the offline engine and shows the API error.
 
 ## MCP server
 
@@ -25,7 +50,9 @@ A voice-first AI study and productivity assistant, built for the Amazon Develope
 - **Protocol:** negotiates `2025-11-25`, the latest version, and falls back to older versions for older clients. Built with `@modelcontextprotocol/sdk` 1.32.
 - **Tools:** the same eight tools, with JSON Schemas, titles and annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`). Results include readable `content` and `structuredContent` (`actionId`, `status`, `result`).
 - **Human confirmation:** `deleteTask`, and `generateStudyPlan` when it would replace a plan, use **MCP elicitation** to ask the user if the client supports it. Otherwise the action stays pending until someone confirms it in the dashboard.
-- **Shared state:** MCP calls write to the same store and appear in the dashboard's Activity log, tagged "MCP client".
+- **Shared state:** MCP calls write to the same store and appear in the dashboard's Activity log, marked "via MCP".
+  - Calls from external clients are tagged "MCP client".
+  - Calls from the Alexa+ simulator carry the user's words, engine and calendar date in `_meta` (`jarvis/request`, `jarvis/provider`, `jarvis/today`), so the log shows the whole request.
 - **Security:**
   - Host-header and Origin validation protect against DNS rebinding.
   - Set `MCP_AUTH_TOKEN` to require `Authorization: Bearer <token>`. Do this before exposing the server beyond localhost, and add your tunnel hostname to `MCP_ALLOWED_HOSTS`.
@@ -78,7 +105,17 @@ Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-Then edit `.env` and set `ANTHROPIC_API_KEY=...`. The server reads `.env` at startup, so restart it after editing. The dashboard footer and `GET /api/health` show the active engine.
+Then edit `.env` and choose one engine. The server reads `.env` at startup, so restart it after editing. The dashboard footer and `GET /api/health` show the active engine, plus a warning if a setting is missing.
+
+| Engine | Cost | `.env` settings |
+|---|---|---|
+| Groq | Free tier, no card | `AI_PROVIDER=groq` and `LLM_API_KEY=<key from console.groq.com>`. Default model: `openai/gpt-oss-120b`. |
+| Gemini | Free tier (Google may use free-tier prompts to improve its products) | `AI_PROVIDER=gemini` and `LLM_API_KEY=<key from aistudio.google.com>`. Default model: `gemini-2.5-flash`. |
+| OpenRouter | Free `:free` models | `AI_PROVIDER=openrouter`, `LLM_API_KEY=...` and `LLM_MODEL=<a model id ending in :free>` |
+| Ollama | Free, runs locally | Install Ollama, run `ollama pull <model>`, then set `AI_PROVIDER=ollama` and `LLM_MODEL=<model>` (no key) |
+| Claude | Paid | `ANTHROPIC_API_KEY=...` (and leave `AI_PROVIDER` empty or set it to `anthropic`) |
+
+Free-tier model lists change often. If a default model stops working, set `LLM_MODEL` to one listed on the provider's models page.
 
 ### 4. Start (development)
 
@@ -108,7 +145,7 @@ This serves the built web app, the API and `/mcp` together on http://localhost:8
 npm test
 ```
 
-Runs 29 tests: REST, the assistant scenarios, the Claude agent loop (against a local mock of the Messages API) and the MCP protocol. Each test uses a temporary data file and its own server on a random port, so it never touches your data and doesn't need a running server, network access or an API key.
+Runs 39 tests: REST, the assistant scenarios (with the simulator reaching the tools over real Streamable HTTP MCP), the Claude agent loop and the OpenAI-compatible agent loop (each against a local mock API), and the MCP protocol. Each test uses a temporary data file and its own server on a random port, so it never touches your data and doesn't need a running server, network access or an API key.
 
 ### 7. Check the MCP endpoint by hand
 
@@ -126,7 +163,10 @@ The response carries an `mcp-session-id` header and `"protocolVersion":"2025-11-
 |---|---|---|
 | `ANTHROPIC_API_KEY` | none | Enables Claude tool calling. Server-side only, never sent to the browser. |
 | `ANTHROPIC_MODEL` | `claude-opus-5-5` | Claude model id |
-| `AI_PROVIDER` | auto | Set to `local` to force the offline engine even when a key is set |
+| `AI_PROVIDER` | auto | `local`, `anthropic`, `groq`, `gemini`, `openrouter`, `ollama` or `openai-compatible`. Empty means Claude if `ANTHROPIC_API_KEY` is set, otherwise offline. |
+| `LLM_API_KEY` | none | Key for the OpenAI-compatible provider (not needed for Ollama). Server-side only. |
+| `LLM_MODEL` | preset | Model id; overrides the preset default |
+| `LLM_BASE_URL` | preset | Chat Completions base URL; overrides the preset default |
 | `API_PORT` | `8787` | API port. If you change it, set it in your shell too so the Vite proxy uses it. |
 | `DATA_FILE` | `./data/db.json` | JSON database path, relative to `server/` |
 | `MCP_AUTH_TOKEN` | none | When set, `/mcp` requires `Authorization: Bearer <token>` |
@@ -204,7 +244,16 @@ The Claude agent tests (`server/test/claude-agent.test.js`) point the real Anthr
 
 They do **not** test which tools the real Claude model chooses. That needs a real API key.
 
-All 29 tests pass.
+The OpenAI-compatible tests (`server/test/openai-agent.test.js`) do the same against a local mock of the Chat Completions API. They check:
+- preset defaults, overrides and missing-setting warnings
+- the request: endpoint, bearer key, model, system date, function tools, `tool_choice: "auto"`
+- the four example flows plus a plan change, and parallel tool calls
+- that broken JSON arguments are logged and never executed
+- that confirmation is still required
+- the fallback on HTTP errors or an unreachable server
+- that Ollama sends no `Authorization` header
+
+All 39 tests pass.
 
 We also ran the four scenarios by hand in the browser, plus confirm/cancel, inline task editing, page reload persistence, and desktop and mobile layouts.
 
@@ -251,17 +300,18 @@ server/
   src/executor.js       validation, confirmation, action log
   src/store.js          JSON-file persistence
   src/dates.js          date helpers
-  src/agent/            claude.js, local.js, index.js
+  src/agent/            index.js (engine choice), gateway.js (MCP client), claude.js, openai.js, local.js, prompt.js
   src/mcp.js            MCP server (Streamable HTTP, 2025-11-25)
   test/api.test.js      end-to-end REST + agent tests
   test/mcp.test.js      MCP protocol tests
   test/claude-agent.test.js  Claude agent loop vs. a local mock API
+  test/openai-agent.test.js  OpenAI-compatible agent loop vs. a local mock API
 docs/SUBMISSION.md      Devpost text, demo script, feedback drafts
 ```
 
 ## Built with
 
-React 19, Vite 7, Node.js, Express 5, zod 4, the Model Context Protocol TypeScript SDK (`@modelcontextprotocol/sdk`), the Anthropic TypeScript/JavaScript SDK (`@anthropic-ai/sdk`) with Claude tool use, and the Web Speech API.
+React 19, Vite 7, Node.js, Express 5, zod 4, the Model Context Protocol TypeScript SDK (`@modelcontextprotocol/sdk`), the Anthropic TypeScript/JavaScript SDK (`@anthropic-ai/sdk`) with Claude tool use, the OpenAI-compatible Chat Completions format (Groq, Gemini, OpenRouter, Ollama), and the Web Speech API.
 
 ## License
 

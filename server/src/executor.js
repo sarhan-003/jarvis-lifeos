@@ -20,8 +20,8 @@ function formatZodError(error) {
 }
 
 export async function executeTool(name, rawArgs, ctx) {
-  const { store, today, request = '', source = 'assistant', provider = null } = ctx;
-  const base = { request, source, provider, tool: name, args: rawArgs ?? {} };
+  const { store, today, request = '', source = 'assistant', provider = null, via } = ctx;
+  const base = { request, source, provider, ...(via ? { via } : {}), tool: name, args: rawArgs ?? {} };
   const tool = TOOLS[name];
   if (!tool) {
     return store.logAction({ ...base, status: 'error', error: `Unknown tool "${name}".` });

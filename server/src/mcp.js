@@ -12,7 +12,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema, LATEST_PROTOCOL_VERSION,
 import { randomUUID } from 'node:crypto';
 import { toolJsonSchemas } from './tools.js';
 import { executeTool, resolveConfirmation } from './executor.js';
-import { todayIso } from './dates.js';
+import { todayIso, isIsoDate } from './dates.js';
 
 export const MCP_PROTOCOL_VERSION = LATEST_PROTOCOL_VERSION;
 
@@ -83,8 +83,13 @@ export function createMcpServer({ store }) {
 
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args = {} } = request.params;
-    const today = todayIso();
-    const ctx = { store, today, source: 'mcp', provider: 'mcp', request: `MCP tools/call ${name}` };
+    // The Alexa+ simulator passes the user's words, its engine and the user's
+    // calendar date in _meta so the action log shows the full story.
+    const meta = request.params._meta ?? {};
+    const today = isIsoDate(meta['jarvis/today']) ? meta['jarvis/today'] : todayIso();
+    const ctx = meta['jarvis/request']
+      ? { store, today, via: 'mcp', source: 'assistant', provider: String(meta['jarvis/provider'] ?? 'unknown'), request: String(meta['jarvis/request']) }
+      : { store, today, via: 'mcp', source: 'mcp', provider: 'mcp', request: `MCP tools/call ${name}` };
     let action = await executeTool(name, args, ctx);
 
     // Human-in-the-loop: when the client supports elicitation, ask the user

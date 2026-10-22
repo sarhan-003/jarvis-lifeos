@@ -14,6 +14,17 @@ export function StatusBadge({ status }) {
   return <span className={`badge badge-${s.cls}`}>{s.label}</span>;
 }
 
+// action.provider is "local" or "<engine>:<model>", e.g. "claude:claude-opus-5-5", "groq:openai/gpt-oss-120b".
+const ENGINES = { claude: 'Claude', groq: 'Groq', openrouter: 'OpenRouter', gemini: 'Gemini', ollama: 'Ollama', 'openai-compatible': 'LLM' };
+
+function sourceLabel(action) {
+  if (action.source === 'ui') return 'manual';
+  if (action.source === 'mcp') return 'MCP client';
+  if (!action.provider || action.provider === 'local') return 'offline engine';
+  const engine = action.provider.split(':')[0];
+  return ENGINES[engine] ?? engine;
+}
+
 function resultSummary(action) {
   const r = action.result;
   if (!r) return null;
@@ -46,9 +57,8 @@ export default function ActionCard({ action, onResolve, compact = false, showReq
       <div className="action-head">
         <code className="tool-name">{action.tool}</code>
         <StatusBadge status={action.status} />
-        <span className="action-source">
-          {action.source === 'ui' ? 'manual' : action.source === 'mcp' ? 'MCP client' : action.provider === 'local' ? 'offline engine' : 'Claude'}
-        </span>
+        {action.via === 'mcp' && <span className="badge badge-mcp">via MCP</span>}
+        <span className="action-source">{sourceLabel(action)}</span>
       </div>
       {showRequest && action.request && action.source !== 'ui' && <p className="action-request">“{action.request}”</p>}
       {action.status === 'error' ? (

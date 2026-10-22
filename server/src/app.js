@@ -10,6 +10,7 @@ import { TOOLS, ToolError } from './tools.js';
 import { handleChat, providerInfo } from './agent/index.js';
 import { isIsoDate, todayIso } from './dates.js';
 import { mcpRoutes, MCP_PROTOCOL_VERSION } from './mcp.js';
+import { connectGateway } from './agent/gateway.js';
 
 const chatBody = z.object({
   message: z.string().trim().min(1, 'message is required').max(2000),
@@ -79,6 +80,24 @@ export function createApp({ store, clientDist } = {}) {
       res.json(out);
     } catch (err) {
       next(err);
+    }
+  });
+
+  // ---- MCP server info (for the dashboard's MCP page), discovered over MCP itself ----
+  app.get('/api/mcp', async (req, res) => {
+    const gateway = await connectGateway({ store });
+    try {
+      res.json({
+        endpoint: `${req.protocol}://${req.get('host')}/mcp`,
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        transport: 'streamable-http',
+        auth: Boolean(process.env.MCP_AUTH_TOKEN),
+        simulatorTransport: gateway.transport,
+        tools: gateway.tools.map(({ name, title, description, annotations }) => ({ name, title, description, annotations })),
+        mcpCalls: store.data.actions.filter((a) => a.via === 'mcp').length,
+      });
+    } finally {
+      await gateway.close();
     }
   });
 

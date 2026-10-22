@@ -8,6 +8,8 @@ import path from 'node:path';
 import { Store } from '../src/store.js';
 import { createApp } from '../src/app.js';
 import { toolJsonSchemas } from '../src/tools.js';
+import { setGatewayUrl } from '../src/agent/gateway.js';
+import { stripInvocation } from '../src/agent/index.js';
 
 process.env.AI_PROVIDER = 'local';
 const TODAY = '2026-10-22';
@@ -24,6 +26,8 @@ before(async () => {
     server = app.listen(0, resolve);
   });
   base = `http://127.0.0.1:${server.address().port}`;
+  // Like the real app: the assistant reaches the tools over Streamable HTTP MCP.
+  setGatewayUrl(`${base}/mcp`);
 });
 
 after(() => server.close());
@@ -198,6 +202,40 @@ test('data persists across a restart (new Store on the same file)', () => {
   const reloaded = new Store(dataFile);
   assert.ok(reloaded.listTasks().some((t) => t.title === 'Revise AVL and binary trees'));
   assert.ok(reloaded.getPlanByDate(TOMORROW));
+});
+
+test('Alexa+ simulator: assistant tool calls travel over MCP Streamable HTTP', async () => {
+  const { body } = await chat('Alexa, ask Jarvis to add a task to review heaps tomorrow');
+  assert.deepEqual(body.mcp, { transport: 'streamable-http', toolsDiscovered: 8 });
+  const [action] = body.actions;
+  assert.equal(action.tool, 'createTask');
+  assert.equal(action.status, 'success');
+  assert.equal(action.via, 'mcp');
+  assert.equal(action.source, 'assistant');
+  assert.equal(action.provider, 'local');
+  assert.equal(action.request, 'add a task to review heaps tomorrow');
+  assert.equal(action.result.task.title, 'Review heaps');
+  assert.equal(action.result.task.dueDate, TOMORROW, 'client date passed through MCP _meta');
+});
+
+test('invocation phrases are stripped the way Alexa+ hands off to an integration', () => {
+  assert.equal(stripInvocation('Alexa, ask Jarvis to show my pending tasks'), 'show my pending tasks');
+  assert.equal(stripInvocation('alexa tell jarvis lifeos mark heaps complete'), 'mark heaps complete');
+  assert.equal(stripInvocation('Hey Alexa, show my tasks'), 'show my tasks');
+  assert.equal(stripInvocation('Jarvis, what is my daily summary?'), 'what is my daily summary?');
+  assert.equal(stripInvocation('Show my pending tasks'), 'Show my pending tasks');
+});
+
+test('GET /api/mcp describes the server using live MCP discovery', async () => {
+  const { status, body } = await call('GET', '/api/mcp');
+  assert.equal(status, 200);
+  assert.equal(body.protocolVersion, '2025-11-25');
+  assert.equal(body.transport, 'streamable-http');
+  assert.equal(body.simulatorTransport, 'streamable-http');
+  assert.match(body.endpoint, /\/mcp$/);
+  assert.equal(body.tools.length, 8);
+  assert.equal(body.tools.find((t) => t.name === 'deleteTask').annotations.destructiveHint, true);
+  assert.ok(body.mcpCalls > 0);
 });
 
 test('tool JSON schemas are generated for the LLM', () => {

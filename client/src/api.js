@@ -26,6 +26,7 @@ const q = (params) => `?${new URLSearchParams({ today: localToday(), ...params }
 
 export const api = {
   health: () => request('GET', '/api/health'),
+  mcp: () => request('GET', '/api/mcp'),
   chat: (message, history) => request('POST', '/api/chat', { message, history }),
   tasks: () => request('GET', '/api/tasks'),
   createTask: (fields) => request('POST', '/api/tasks', fields),
