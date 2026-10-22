@@ -1,0 +1,26 @@
+# Parcel Concierge MCP server (Streamable HTTP at /mcp).
+# Build from the repo root:  docker build -f deploy/Dockerfile.mcp -t parcel-mcp .
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages/domain/package.json packages/domain/
+COPY apps/mcp-server/package.json apps/mcp-server/
+COPY apps/agent-api/package.json apps/agent-api/
+COPY apps/web/package.json apps/web/
+RUN npm ci
+COPY packages/domain packages/domain
+COPY apps/mcp-server apps/mcp-server
+RUN npm run build -w packages/domain && npm run build -w apps/mcp-server \
+ && npm prune --omit=dev
+
+FROM node:22-alpine
+ENV NODE_ENV=production PORT=8080
+WORKDIR /app
+COPY --from=build /app/node_modules node_modules
+COPY --from=build /app/packages/domain/package.json packages/domain/
+COPY --from=build /app/packages/domain/dist packages/domain/dist
+COPY --from=build /app/apps/mcp-server/package.json apps/mcp-server/
+COPY --from=build /app/apps/mcp-server/dist apps/mcp-server/dist
+EXPOSE 8080
+USER node
+CMD ["node", "apps/mcp-server/dist/index.js"]

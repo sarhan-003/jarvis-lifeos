@@ -4,7 +4,7 @@ import type { DeliverySlot, DeliveryWindow, DocumentType, InstructionType, Retur
 import { HOLD_REASON_TEXT, WINDOW_LABELS } from './schemas.js';
 import type { ShipmentStore } from './store.js';
 import { isoDate, resolveDate, spokenDay, spokenTime } from './dates.js';
-import { formatUsd, listJoin, numberToWords, spokenUsd } from './speech.js';
+import { formatUsd, listJoin, numberToWords, spokenUsd, verb } from './speech.js';
 import { resolveShipment } from './rules/resolve.js';
 import { applyDocument, applyPayment, dutyFor, type DutyBreakdown } from './rules/customs.js';
 import { applyInstruction, applyReschedule, canReschedule } from './rules/delivery.js';
@@ -138,10 +138,10 @@ export class ParcelConcierge {
     if (!shipments.length) return success('You have no parcels on the way right now.', { shipments, count: 0 });
 
     const arriving = sorted.filter((s) => s.eta && ['OutForDelivery', 'InTransit', 'ArrivedInCountry'].includes(s.status));
-    const parts = arriving.slice(0, 3).map((s, i) => `${i === 0 ? 'Your' : 'your'} ${s.nickname} ${s.status === 'OutForDelivery' ? 'arrives' : 'should arrive'} ${this.when(s)}`);
+    const parts = arriving.slice(0, 3).map((s, i) => `${i === 0 ? 'Your' : 'your'} ${s.nickname} ${s.status === 'OutForDelivery' ? verb(s.nickname, 'arrives', 'arrive') : 'should arrive'} ${this.when(s)}`);
     const issues = sorted
       .filter((s) => s.status === 'CustomsHold' || s.status === 'DeliveryException')
-      .map((s) => (s.status === 'CustomsHold' ? `your ${s.nickname} is held in customs` : `your ${s.nickname} had a delivery problem`));
+      .map((s) => (s.status === 'CustomsHold' ? `your ${s.nickname} ${verb(s.nickname, 'is', 'are')} held in customs` : `your ${s.nickname} had a delivery problem`));
     const n = shipments.length;
     let speech = `You have ${numberToWords(n)} parcel${n === 1 ? '' : 's'} ${includeDelivered ? 'in total' : 'on the way'}.`;
     if (parts.length) speech += ` ${listJoin(parts)}.`;
@@ -165,19 +165,19 @@ export class ParcelConcierge {
     let speech: string;
     switch (s.status) {
       case 'Delivered':
-        speech = `Your ${s.nickname} was delivered ${s.proofOfDelivery ? `${spokenDay(isoDate(new Date(s.proofOfDelivery.deliveredAt)), this.today())} at ${spokenTime(s.proofOfDelivery.deliveredAt)}, left at the ${s.proofOfDelivery.leftAt}` : ''}.`;
+        speech = `Your ${s.nickname} ${verb(s.nickname, 'was', 'were')} delivered ${s.proofOfDelivery ? `${spokenDay(isoDate(new Date(s.proofOfDelivery.deliveredAt)), this.today())} at ${spokenTime(s.proofOfDelivery.deliveredAt)}, left at the ${s.proofOfDelivery.leftAt}` : ''}.`;
         break;
       case 'CustomsHold':
-        speech = `Your ${s.nickname} is held in customs in Seattle. Ask me why and I can help clear it.`;
+        speech = `Your ${s.nickname} ${verb(s.nickname, 'is', 'are')} held in customs in Seattle. Ask me why and I can help clear it.`;
         break;
       case 'DeliveryException':
         speech = `Delivery of your ${s.nickname} failed: ${(s.exceptionReason ?? 'there was a problem').toLowerCase()}. I can fix the address for you.`;
         break;
       case 'LabelCreated':
-        speech = `Your ${s.nickname} hasn't shipped yet; the merchant has created the label.`;
+        speech = `Your ${s.nickname} ${verb(s.nickname, "hasn't", "haven't")} shipped yet; the merchant has created the label.`;
         break;
       default:
-        speech = `Your ${s.nickname} is ${STATUS_TEXT[s.status].toLowerCase()}${s.eta ? ` and should arrive ${this.when(s)}` : ''}.`;
+        speech = `Your ${s.nickname} ${verb(s.nickname, 'is', 'are')} ${STATUS_TEXT[s.status].toLowerCase()}${s.eta ? ` and should arrive ${this.when(s)}` : ''}.`;
     }
     if (s.deliveryInstructions && s.status !== 'Delivered') speech += ` Instructions: ${s.deliveryInstructions.toLowerCase()}.`;
     if (!speech.trim() && last) speech = last.description;
@@ -212,10 +212,10 @@ export class ParcelConcierge {
       nextStep,
     };
     if (!inCustoms) {
-      return success(c ? `Your ${s.nickname} has cleared customs.` : `Your ${s.nickname} isn't going through customs.`, view);
+      return success(c ? `Your ${s.nickname} ${verb(s.nickname, 'has', 'have')} cleared customs.` : `Your ${s.nickname} ${verb(s.nickname, "isn't", "aren't")} going through customs.`, view);
     }
     const reasons = view.holdReasons.map((r) => r.text.replace(/\.$/, '').replace(/^Customs needs/, 'they need').replace(/^Import duty/, 'import duty'));
-    return success(`Your ${s.nickname} is held because ${listJoin(reasons)}. ${nextStep}`, view);
+    return success(`Your ${s.nickname} ${verb(s.nickname, 'is', 'are')} held because ${listJoin(reasons)}. ${nextStep}`, view);
   }
 
   payCustomsDuty(query: string, confirm: boolean): OpResult<PaymentView> {
@@ -223,13 +223,13 @@ export class ParcelConcierge {
     if (!found.ok) return found;
     const s = found.data;
     const duty = dutyFor(s);
-    if (!s.customs || !duty || s.status !== 'CustomsHold') return failure(`Your ${s.nickname} isn't held in customs, so there's nothing to pay.`);
+    if (!s.customs || !duty || s.status !== 'CustomsHold') return failure(`Your ${s.nickname} ${verb(s.nickname, "isn't", "aren't")} held in customs, so there's nothing to pay.`);
     if (s.customs.isPaid) return failure(`The duty for your ${s.nickname} is already paid, reference ${s.customs.paymentReference}.`);
 
     const base = { nickname: s.nickname, trackingNumber: s.trackingNumber, amountUsd: duty.total, duty };
     if (!confirm) {
       return success(
-        `The duty for your ${s.nickname} is ${spokenUsd(duty.total, 'exact')}: ${spokenUsd(duty.duty, 'exact')} import duty plus a ${spokenUsd(duty.fee, 'exact')} processing fee. I'll use the payment method on file. Should I pay it?`,
+        `The duty for your ${s.nickname} is ${spokenUsd(duty.total, 'exact')}: ${spokenUsd(duty.duty, 'exact')} of import duty plus a processing fee of ${spokenUsd(duty.fee, 'exact')}. I'll use the payment method on file. Should I pay it?`,
         { ...base, confirmed: false, paymentReference: null, status: s.status, eta: s.eta ?? null, remainingBlockers: [] },
       );
     }
@@ -307,7 +307,7 @@ export class ParcelConcierge {
     const r = applyReschedule(s, this.store.findSlot(resolved, window), this.store.now());
     if (!r.ok) return failure(r.error);
     this.store.saveShipment(r.value);
-    return success(`Done. Your ${s.nickname} will now arrive ${spokenDay(resolved, this.today())} ${window}, between ${WINDOW_LABELS[window]}.`, {
+    return success(`Done. Your ${s.nickname} will now arrive ${spokenDay(resolved, this.today())} ${window}, from ${WINDOW_LABELS[window]}.`, {
       nickname: s.nickname,
       eta: resolved,
       deliveryWindow: window,
@@ -334,7 +334,7 @@ export class ParcelConcierge {
     if (type === 'address_correction') {
       const fixed = s.status === 'DeliveryException';
       return success(
-        `Thanks, I've updated the address to ${r.value.destination.split(',')[1]?.trim() ?? 'the new unit'}.${fixed ? ` Your ${s.nickname} is back on the way and should arrive ${this.when(r.value)}.` : ''}`,
+        `Thanks, I've updated the address to ${r.value.destination.split(',')[1]?.trim() ?? 'the new unit'}.${fixed ? ` Your ${s.nickname} ${verb(s.nickname, 'is', 'are')} back on the way and should arrive ${this.when(r.value)}.` : ''}`,
         data,
       );
     }
@@ -346,11 +346,11 @@ export class ParcelConcierge {
     if (!found.ok) return found;
     const s = found.data;
     const pod = s.proofOfDelivery;
-    if (!pod) return failure(`Your ${s.nickname} hasn't been delivered yet, so there's no proof of delivery.`);
+    if (!pod) return failure(`Your ${s.nickname} ${verb(s.nickname, "hasn't", "haven't")} been delivered yet, so there's no proof of delivery.`);
     const day = spokenDay(isoDate(new Date(pod.deliveredAt)), this.today());
     const returnable = s.status === 'Delivered' && s.returnEligibleUntil && this.today() <= s.returnEligibleUntil;
     return success(
-      `Yes. Your ${s.nickname} was delivered ${day} at ${spokenTime(pod.deliveredAt)} and left at the ${pod.leftAt}. There's a delivery photo on file.${returnable ? ` You can return it until ${spokenDay(s.returnEligibleUntil as string, this.today())}.` : ''}`,
+      `Yes. Your ${s.nickname} ${verb(s.nickname, 'was', 'were')} delivered ${day} at ${spokenTime(pod.deliveredAt)} and left at the ${pod.leftAt}. There's a delivery photo on file.${returnable ? ` You can return ${verb(s.nickname, 'it', 'them')} until ${spokenDay(s.returnEligibleUntil as string, this.today())}.` : ''}`,
       {
         nickname: s.nickname,
         deliveredAt: pod.deliveredAt,

@@ -1,7 +1,7 @@
 // Customs rules: duty arithmetic, simulated payment, document receipt and release.
 import type { DocumentType, Shipment, TrackingEvent } from '../schemas.js';
 import { addDays, isoDate } from '../dates.js';
-import { roundMoney } from '../speech.js';
+import { roundMoney, verb } from '../speech.js';
 import { fail, ok, type RuleResult } from './result.js';
 
 export interface DutyBreakdown {
@@ -46,7 +46,7 @@ export function releaseIfClear(shipment: Shipment, now: Date): Shipment {
 
 export function applyPayment(shipment: Shipment, now: Date, paymentReference: string): RuleResult<Shipment> {
   const c = shipment.customs;
-  if (!c || shipment.status !== 'CustomsHold') return fail(`Your ${shipment.nickname} isn't held in customs, so there's nothing to pay.`);
+  if (!c || shipment.status !== 'CustomsHold') return fail(`Your ${shipment.nickname} ${verb(shipment.nickname, "isn't", "aren't")} held in customs, so there's nothing to pay.`);
   if (c.isPaid) return fail(`The duty for your ${shipment.nickname} is already paid (reference ${c.paymentReference}).`);
   const duty = dutyFor(shipment);
   const paid: Shipment = {
@@ -64,7 +64,7 @@ export function applyPayment(shipment: Shipment, now: Date, paymentReference: st
 
 export function applyDocument(shipment: Shipment, documentType: DocumentType, now: Date): RuleResult<Shipment> {
   const c = shipment.customs;
-  if (!c || shipment.status !== 'CustomsHold') return fail(`Your ${shipment.nickname} isn't held in customs, so no documents are needed.`);
+  if (!c || shipment.status !== 'CustomsHold') return fail(`Your ${shipment.nickname} ${verb(shipment.nickname, "isn't", "aren't")} held in customs, so no documents are needed.`);
   if (!c.missingDocuments.includes(documentType)) {
     return fail(`Customs isn't waiting for a ${documentType === 'commercial_invoice' ? 'commercial invoice' : 'proof of ID'} for your ${shipment.nickname}.`);
   }

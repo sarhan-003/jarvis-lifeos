@@ -11,7 +11,9 @@ env.WEB_DIST ??= path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 
 const gateway = new McpToolGateway(env.MCP_SERVER_URL, env.MCP_DEV_TOKEN);
 const choice = chooseProvider(env, gateway);
-const port = env.PORT ?? env.AGENT_PORT;
+// --port=N (used by `npm run dev`) wins over PORT, which hosts like App Runner set.
+const cliPort = process.argv.find((a) => a.startsWith('--port='))?.split('=')[1];
+const port = cliPort ? Number(cliPort) : (env.PORT ?? env.AGENT_PORT);
 
 createAgentApp({ env, gateway, choice }).listen(port, () => {
   console.log(`Agent API on http://localhost:${port} | MCP: ${env.MCP_SERVER_URL} | engine: ${choice.provider.label}`);

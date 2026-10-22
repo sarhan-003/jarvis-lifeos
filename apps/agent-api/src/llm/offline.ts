@@ -15,7 +15,17 @@ interface OfflineState {
 }
 
 const WEEKDAY = '(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)';
-const DATE_RE = new RegExp(`\\b(\\d{4}-\\d{2}-\\d{2}|tomorrow|today|day after tomorrow|${WEEKDAY})\\b`, 'i');
+const DATE_RE = new RegExp(`\\b(\\d{4}-\\d{2}-\\d{2}|day after tomorrow|tomorrow|today|${WEEKDAY})\\b`, 'gi');
+
+/**
+ * The date the user wants. In "I won't be home tomorrow, can it come
+ * Saturday?" the explicit weekday or ISO date wins over tomorrow/today.
+ */
+function pickDate(text: string): string | undefined {
+  const found = [...text.matchAll(DATE_RE)].map((m) => (m[1] ?? '').toLowerCase());
+  const specific = found.filter((d) => /\d|day$/.test(d) && d !== 'today' && !d.endsWith('tomorrow'));
+  return specific.at(-1) ?? found.at(-1);
+}
 const WINDOW_RE = /\b(morning|afternoon|evening)\b/i;
 const YES_RE = /^(yes|yeah|yep|yup|sure|ok|okay|please do|go ahead|do it|confirm|pay it)\b/i;
 const NO_RE = /^(no|nope|cancel|don't|do not|stop|not now)\b/i;
@@ -96,7 +106,7 @@ export class OfflineProvider implements LlmProvider {
     if (prev.awaiting?.type === 'return_reason') {
       if (NO_RE.test(t)) return { text: 'Okay, no return booked.', toolCalls: [] };
       const reason = text.replace(/^(because|the reason is|reason:?)\s*/i, '').trim() || 'Customer changed their mind';
-      const date = DATE_RE.exec(t)?.[1] ?? 'tomorrow';
+      const date = pickDate(t) ?? 'tomorrow';
       const window = WINDOW_RE.exec(t)?.[1]?.toLowerCase() ?? 'morning';
       return turn([call('request_return_pickup', { shipment: prev.awaiting.shipment, reason, pickup_date: date, pickup_window: window })]);
     }
@@ -137,7 +147,7 @@ export class OfflineProvider implements LlmProvider {
     if (/\b(delivered|proof|photo|where did .* leave|left)\b/.test(t) && shipment) {
       return turn([call('get_proof_of_delivery', { shipment })]);
     }
-    const date = DATE_RE.exec(t)?.[1];
+    const date = pickDate(t);
     const window = WINDOW_RE.exec(t)?.[1]?.toLowerCase();
     if (shipment && (/\b(reschedule|move|change|come|arrive|deliver)\b/.test(t) || /\bwon'?t be home\b/.test(t)) && (date || /\bslots?\b/.test(t))) {
       if (date && window) {

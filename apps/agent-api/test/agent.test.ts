@@ -2,7 +2,7 @@
 // Concierge MCP server -> in-memory store. Uses the offline engine (no keys).
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
-import { InMemoryShipmentStore, ParcelConcierge, type ChatResponse } from '@parcel/domain';
+import { InMemoryShipmentStore, ParcelConcierge, isoDate, resolveDate, type ChatResponse } from '@parcel/domain';
 import { createApp as createMcpApp } from '../../mcp-server/src/app.js';
 import { McpToolGateway } from '../src/mcpClient.js';
 import { chooseProvider } from '../src/providers.js';
@@ -88,7 +88,10 @@ describe('demo utterances (offline engine, real MCP server)', () => {
     const r1 = await conversation()("I won't be home tomorrow, can the books come Saturday evening?");
     expect(tools(r1)).toEqual(['get_delivery_slots', 'reschedule_delivery']);
     expect(r1.cards.map((c) => c.type)).toEqual(['confirmation']);
-    expect(store.getShipment('shp_books')?.deliveryWindow).toBe('evening');
+    expect(r1.toolCalls[1]?.args).toMatchObject({ date: 'saturday', window: 'evening' });
+    const books = store.getShipment('shp_books');
+    expect(books?.eta).toBe(resolveDate('saturday', isoDate(new Date())));
+    expect(books?.deliveryWindow).toBe('evening');
   });
 
   it('6. "Leave my running shoes with Sam next door."', async () => {

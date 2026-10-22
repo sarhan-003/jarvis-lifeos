@@ -2,6 +2,7 @@
 import type { Customer, DeliverySlot, InstructionType, Shipment, TrackingEvent } from '../schemas.js';
 import { WINDOW_LABELS } from '../schemas.js';
 import { addDays, isoDate } from '../dates.js';
+import { verb } from '../speech.js';
 import { fail, ok, type RuleResult } from './result.js';
 
 const event = (now: Date, code: string, description: string): TrackingEvent => ({
@@ -14,13 +15,13 @@ const event = (now: Date, code: string, description: string): TrackingEvent => (
 export function canReschedule(shipment: Shipment): RuleResult<true> {
   switch (shipment.status) {
     case 'Delivered':
-      return fail(`Your ${shipment.nickname} has already been delivered.`);
+      return fail(`Your ${shipment.nickname} ${verb(shipment.nickname, 'has', 'have')} already been delivered.`);
     case 'LabelCreated':
-      return fail(`Your ${shipment.nickname} hasn't shipped yet, so it can't be rescheduled.`);
+      return fail(`Your ${shipment.nickname} ${verb(shipment.nickname, "hasn't", "haven't")} shipped yet, so it can't be rescheduled.`);
     case 'CustomsHold':
-      return fail(`Your ${shipment.nickname} is held in customs. It needs to be released before delivery can be rescheduled.`);
+      return fail(`Your ${shipment.nickname} ${verb(shipment.nickname, 'is', 'are')} held in customs. It needs to be released before delivery can be rescheduled.`);
     case 'ReturnRequested':
-      return fail(`Your ${shipment.nickname} is being returned.`);
+      return fail(`Your ${shipment.nickname} ${verb(shipment.nickname, 'is', 'are')} being returned.`);
     default:
       return ok(true);
   }
@@ -49,7 +50,7 @@ export function applyInstruction(
   now: Date,
 ): RuleResult<Shipment> {
   if (shipment.status === 'Delivered' || shipment.status === 'ReturnRequested') {
-    return fail(`Your ${shipment.nickname} has already been delivered, so delivery instructions can't change.`);
+    return fail(`Your ${shipment.nickname} ${verb(shipment.nickname, 'has', 'have')} already been delivered, so delivery instructions can't change.`);
   }
   const d = details?.trim();
   let instruction: string;

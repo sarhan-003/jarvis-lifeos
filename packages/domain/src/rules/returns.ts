@@ -1,11 +1,12 @@
 // Return rules: only delivered parcels inside the return window.
 import type { DeliveryWindow, ReturnRequest, Shipment } from '../schemas.js';
 import { isoDate } from '../dates.js';
+import { verb } from '../speech.js';
 import { fail, ok, type RuleResult } from './result.js';
 
 export function canReturn(shipment: Shipment, now: Date): RuleResult<true> {
   if (shipment.status === 'ReturnRequested') return fail(`A return is already booked for your ${shipment.nickname}.`);
-  if (shipment.status !== 'Delivered') return fail(`Your ${shipment.nickname} hasn't been delivered yet, so it can't be returned.`);
+  if (shipment.status !== 'Delivered') return fail(`Your ${shipment.nickname} ${verb(shipment.nickname, "hasn't", "haven't")} been delivered yet, so it can't be returned.`);
   if (!shipment.returnEligibleUntil || isoDate(now) > shipment.returnEligibleUntil) {
     return fail(`The return window for your ${shipment.nickname} has closed.`);
   }

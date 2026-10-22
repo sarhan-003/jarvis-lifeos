@@ -39,6 +39,12 @@ export function spokenUsd(amount: number, mode: 'approx' | 'exact' = 'approx'): 
 
 export const formatUsd = (amount: number): string => `$${roundMoney(amount).toFixed(2)}`;
 
+/** Nicknames like "running shoes" or "books" take plural verbs. */
+export const isPlural = (nickname: string): boolean => /s$/i.test(nickname.trim()) && !/(ss|us)$/i.test(nickname.trim());
+
+/** Pick the verb form that agrees with the nickname: verb(nick, 'arrives', 'arrive'). */
+export const verb = (nickname: string, singular: string, plural: string): string => (isPlural(nickname) ? plural : singular);
+
 /** Join items as "a, b and c". */
 export function listJoin(items: string[]): string {
   if (items.length <= 1) return items.join('');
