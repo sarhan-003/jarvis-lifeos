@@ -32,8 +32,11 @@ export function useSpeechSynthesis() {
   }, []);
 
   const speak = useCallback(
-    (text: string) => {
-      if (!supported || !enabled || !text) return;
+    (text: string, onDone?: () => void) => {
+      if (!supported || !enabled || !text) {
+        onDone?.();
+        return;
+      }
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       const voice = pickVoice();
@@ -41,7 +44,11 @@ export function useSpeechSynthesis() {
       u.lang = 'en-US';
       u.rate = 1.03;
       u.onstart = () => setSpeaking(true);
-      u.onend = () => setSpeaking(false);
+      u.onend = () => {
+        setSpeaking(false);
+        onDone?.();
+      };
+      // Interrupted or failed speech must not reopen the mic.
       u.onerror = () => setSpeaking(false);
       window.speechSynthesis.speak(u);
     },

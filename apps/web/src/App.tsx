@@ -38,6 +38,11 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const tts = useSpeechSynthesis();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Hands-free: reopen the mic after each spoken reply, for a continuous conversation.
+  const [handsFree, setHandsFree] = useState(false);
+  const handsFreeRef = useRef(false);
+  handsFreeRef.current = handsFree;
+  const listenRef = useRef<() => void>(() => undefined);
 
   // Retry while the agent API is still starting (dev servers boot in parallel).
   useEffect(() => {
@@ -77,7 +82,9 @@ export default function App() {
         setNotice(res.notice);
         setCards(res.cards);
         setTurns((t) => [...t, { id: ++turnId, message: m, engine: res.engine, calls: res.toolCalls }].slice(-30));
-        tts.speak(res.speech);
+        tts.speak(res.speech, () => {
+          if (handsFreeRef.current) setTimeout(() => listenRef.current(), 250);
+        });
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -88,6 +95,22 @@ export default function App() {
   );
 
   const voice = useSpeechRecognition((spoken) => void send(spoken));
+  listenRef.current = voice.start;
+
+  // Silence or a mic error ends hands-free mode instead of looping.
+  useEffect(() => {
+    if (voice.error) setHandsFree(false);
+  }, [voice.error]);
+
+  const toggleHandsFree = () => {
+    const next = !handsFree;
+    setHandsFree(next);
+    if (next && !voice.listening && !thinking) {
+      tts.cancel();
+      voice.start();
+    } else if (!next && voice.listening) voice.stop();
+  };
+
   const status: Status = voice.listening ? 'listening' : thinking ? 'thinking' : tts.speaking ? 'speaking' : 'idle';
 
   // Space = push to talk, unless typing in the text box.
@@ -148,6 +171,9 @@ export default function App() {
           </span>
           <button className={`rounded-full border px-3 py-1 ${tts.enabled ? 'border-glow/50 text-sky-300' : 'border-line text-slate-400'}`} onClick={() => tts.setEnabled(!tts.enabled)} disabled={!tts.supported} aria-pressed={tts.enabled}>
             {tts.enabled ? '🔊 Voice' : '🔇 Muted'}
+          </button>
+          <button className={`rounded-full border px-3 py-1 ${handsFree ? 'border-emerald-400/60 text-emerald-300' : 'border-line text-slate-300'}`} onClick={toggleHandsFree} disabled={!voice.supported} aria-pressed={handsFree} title="Keep listening after each reply">
+            {handsFree ? '🎙️ Hands-free on' : '🎙️ Hands-free'}
           </button>
           <button className={`rounded-full border px-3 py-1 ${showTrace ? 'border-glow/50 text-sky-300' : 'border-line text-slate-300'}`} onClick={() => setShowTrace((s) => !s)} aria-pressed={showTrace}>
             Tool trace
