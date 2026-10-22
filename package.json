@@ -4,6 +4,9 @@
   "private": true,
   "description": "Jarvis LifeOS - an Alexa+-style simulated AI study and productivity assistant with real tool calling.",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.9.0"
+  },
   "workspaces": [
     "server",
     "client"

@@ -38,33 +38,87 @@ npx @modelcontextprotocol/inspector
 
 Choose transport "Streamable HTTP" and URL `http://localhost:8787/mcp`.
 
-## Quick start
+## Setup and running
 
-Requirements: Node.js 20.6 or newer (tested on 25.9) and npm.
+### 1. Requirements
+
+- **Node.js 22.9 or newer** with npm. The scripts use `node --env-file-if-exists` and `node --test` glob patterns, which older versions lack. We tested on Node 25.9 and npm 11.12 on Windows 10.
+- Git.
+- For voice input: Chrome or Edge. Typing works in every browser.
+
+Check your versions:
+
+```bash
+node -v
+```
+
+### 2. Install
+
+From the repository root (an npm workspace with `client/` and `server/`):
 
 ```bash
 npm install
 ```
 
+For a clean, reproducible install from the lockfile, use `npm ci` instead.
+
+### 3. Configure the environment (optional)
+
+The app runs with no configuration: it uses the offline intent engine and stores data in `server/data/db.json`. To enable Claude, create `.env` in the repository root.
+
+macOS/Linux/Git Bash:
+
+```bash
+cp .env.example .env
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Then edit `.env` and set `ANTHROPIC_API_KEY=...`. The server reads `.env` at startup, so restart it after editing. The dashboard footer and `GET /api/health` show the active engine.
+
+### 4. Start (development)
+
 ```bash
 npm run dev
 ```
 
-Open http://localhost:5173. The API runs on http://localhost:8787 and Vite proxies `/api` to it.
+This starts both processes:
+- Web app: http://localhost:5173. Vite proxies `/api` to the API.
+- API and MCP server: http://localhost:8787. MCP endpoint: http://localhost:8787/mcp
 
-To use Claude, copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY`, then restart `npm run dev`. The header shows which engine is active.
+### 5. Start (production build)
 
-Other commands:
+```bash
+npm run build
+```
+
+```bash
+npm start
+```
+
+This serves the built web app, the API and `/mcp` together on http://localhost:8787.
+
+### 6. Test
 
 ```bash
 npm test
 ```
 
+Runs 23 end-to-end tests: REST, the assistant scenarios and the MCP protocol. Each test starts its own server on a random port with a temporary data file, so it never touches your data and doesn't need a running server or an API key.
+
+### 7. Check the MCP endpoint by hand
+
+With the server running:
+
 ```bash
-npm run build && npm start
+curl -i http://localhost:8787/mcp -H "content-type: application/json" -H "accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
 ```
 
-`npm test` runs the backend end-to-end tests. `npm run build && npm start` serves the built client and the API together on port 8787.
+The response carries an `mcp-session-id` header and `"protocolVersion":"2025-11-25"`. Send that header (and `mcp-protocol-version: 2025-11-25`) on later requests such as `tools/list` and `tools/call`.
 
 ### Environment variables
 
@@ -145,10 +199,29 @@ All 23 tests pass.
 
 We also ran the four scenarios by hand in the browser, plus confirm/cancel, inline task editing, page reload persistence, and desktop and mobile layouts.
 
-**Not yet verified:** Claude tool selection against a live API key (the build machine had none). With an invalid key we confirmed that the SDK call reaches the Anthropic API, the 401 is handled, and the offline engine takes over with a visible notice.
+### Verification status (2026-10-22, Windows 10, Node 25.9)
+
+**Tested and working:**
+- `npm test`: 23/23 pass, both in the working copy and in a fresh `git clone` + `npm ci`.
+- `npm run build` + `npm start` from a fresh clone. The built web app, `/api` and `/mcp` are all served together.
+- `/mcp` over raw HTTP (curl):
+  - `initialize` returns protocol `2025-11-25` and an `mcp-session-id`
+  - `notifications/initialized` returns 202
+  - `tools/list` returns all 8 tools
+  - `tools/call` writes real records to the data file, and invalid arguments return `isError: true`
+- MCP persistence across a server restart: a task and plan created over MCP before the restart could be listed, changed and completed after it, and the REST API showed the same records.
+- Web app against the production build: the four scenarios, a plan change, and a delete confirmed through the UI, all reflected in the API, with no browser console errors.
+- Dev mode: the Vite proxy forwards `/api` correctly. Cross-site browser origins get 403.
+
+**Not verified:**
+- Claude tool selection with a real API key (the build machine had none). With an invalid key, the SDK call reaches the Anthropic API, the 401 is handled, and the offline engine takes over with a visible notice.
+- Voice input with a real microphone. Speech output was observed working.
+- Third-party MCP clients (MCP Inspector, Claude Desktop) and any connection to Alexa+ itself. MCP was tested with the official `@modelcontextprotocol/sdk` client and with raw HTTP.
+- Node versions below 25.9, macOS and Linux.
 
 ## Limitations
 
+- On Windows, stopping `npm start` from a parent process (not a terminal Ctrl+C) can leave the child `node` process holding port 8787. Stop it from Task Manager, or run `node src/index.js` in `server/` directly.
 - The offline engine only understands the phrasings it was written for. Use Claude for open-ended language.
 - Speech recognition depends on the browser: Chrome and Edge support it, Firefox does not. Typing always works.
 - Single user and no authentication. The JSON file store suits a demo, not a multi-user deployment.
